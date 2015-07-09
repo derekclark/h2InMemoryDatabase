@@ -1,0 +1,190 @@
+apply plugin: 'java'
+apply plugin: 'maven'
+apply plugin: 'idea'
+apply plugin: 'eclipse'
+//apply plugin: 'com.github.johnrengelman.shadow'
+//apply plugin: 'com.moowork.node'
+
+buildscript {
+  dependencies {
+    repositories {
+      maven { url "http://artifactory.devops.aws.travisperkins.com:8080/artifactory/maven" }
+    }
+
+    classpath 'org.apache.commons:commons-lang3:3.3.2'
+    classpath "com.moowork.gradle:gradle-node-plugin:0.9"
+    classpath 'com.github.jengelman.gradle.plugins:shadow:1.2.1'
+  }
+}
+
+sourceCompatibility = '1.8'
+targetCompatibility = '1.8'
+
+node {
+    version = '0.12.2'                            // Version of node to use.
+    npmVersion = '2.9.0'                          // Version of npm to use.
+    distBaseUrl = 'http://nodejs.org/dist'        // Base URL for fetching node distributions (change if you have a mirror).
+    workDir = file("${project.buildDir}/nodejs")  // Set the work directory for unpacking node
+
+    download = true                               // If true, download node using above parameters.
+                                                  // If false, it will try to use globally installed node.
+}
+
+configurations {
+  outputDirs
+
+  compile.extendsFrom common
+
+  testCompile.extendsFrom commonTest
+
+  bddtestCompile.extendsFrom common, commonTest
+
+  bddtestUsageCompile.extendsFrom common
+  bddtestUsageRuntime.extendsFrom common
+}
+
+eclipse {
+    classpath {
+        plusConfigurations += [ configurations.bddtestCompile ]
+    }
+}
+
+
+project.ext {
+    service_name = "branch-entity-service"
+
+    dockerPort = "8080"
+    dockerConfigPort = "8081"
+    containerName = "branch-entity-service"
+
+    registry = "artifactory.devops.aws.travisperkins.com"
+    repository = "${registry}/${service_name}"
+
+    known_environment_variables = ["IN_MEM"]
+
+    experimentalTag = "${repository}:experimental"
+    stableTag = "${repository}:stable"
+    deprecatedTag = "${repository}:deprecated"
+
+    runInMemory = true
+}
+
+sourceSets {
+  bddtest {
+    compileClasspath = sourceSets.main.output + configurations.bddtestCompile
+    runtimeClasspath = output + compileClasspath + configurations.bddtestRuntime
+    java { srcDirs = ['src/bddtest/java']}
+    resources { srcDirs = ['src/bddtest/resources']}
+  }
+
+}
+
+shadowJar {
+    archiveName = 'branch-entity-service.jar'
+    classifier = ''
+    mergeServiceFiles()
+    exclude 'META-INF/*.DSA'
+    exclude 'META-INF/*.RSA'
+
+    manifest {
+        attributes 'Main-Class': 'uk.co.tpplc.branch.BranchApplication'
+    }
+}
+
+shadowJar.dependsOn('test')
+
+repositories {
+  maven { url "http://artifactory.devops.aws.travisperkins.com:8080/artifactory/maven" }
+}
+
+dependencies {
+  //common  group:  'asjava',                 name: 'asjava',               version: '1.0.0'
+  //common  group:  'uk.co.tpplc.library',    name: 'rest-exceptions',      version: '0.0.1'
+  //common  group:  'uk.co.tpplc.library',    name: 'tp-headers-core',      version: '0.0.5'
+  //common (group:  'uk.co.tpplc.library',    name: 'httpclient',           version: '1.1.4') { exclude group: 'org.springframework' }
+  common  group:  'com.h2database',         name: 'h2',                   version: '1.4.187'
+  common  group:  'mysql',                  name: 'mysql-connector-java', version: '5.1.34'
+  common  group:  'com.h2database',         name: 'h2',                   version: '1.4.182'
+  common  group:  'org.flywaydb',           name: 'flyway-core',          version: '3.1'
+
+  commonTest group: 'org.assertj',          name: 'assertj-core',         version: '3.0.0'
+
+  //compile group: 'io.dropwizard',           name: 'dropwizard-core',            version: '0.8.1'
+  //compile group: 'io.dropwizard',           name: 'dropwizard-jdbi',            version: '0.8.1'
+  //compile group: 'de.thomaskrille',         name: 'dropwizard-template-config', version: '1.1.0'
+
+  compile group: 'com.h2database',          name: 'h2',                   version: '1.4.187'
+  compile group: 'commons-codec',           name: 'commons-codec',        version: '1.10'
+  compile group: 'uk.co.tpplc.library',     name: 'json-serialization',   version: '1.0.2'
+  //compile (group: 'uk.co.tpplc.library',    name: 'tp-headers-servlet',   version: '0.0.5') { exclude group: 'javax.servlet' }
+  //compile group: 'com.amazonaws',           name: 'aws-java-sdk-sns',     version: '1.9.40'
+  //compile group: 'com.amazonaws',           name: 'aws-java-sdk-sqs',     version: '1.9.40'
+
+  //testCompile group: 'io.dropwizard',       name: 'dropwizard-testing',   version: '0.8.1'
+  testCompile group: 'junit',               name: 'junit',                version: '4.11'
+  //testCompile group: 'com.jayway.jsonpath', name: 'json-path-assert',     version: '2.0.0'
+  //testCompile group: 'org.mockito',         name: 'mockito-all',          version: '1.9.5'
+
+  //bddtestCompile group: 'info.cukes',       name: 'cucumber-java',        version: '1.2.2'
+  //bddtestCompile group: 'info.cukes',       name: 'cucumber-junit',       version: '1.2.2'
+}
+
+task wrapper(type: Wrapper) { gradleVersion = '2.4' }
+
+task cucumber(type: JavaExec) {
+    main = "cucumber.api.cli.Main"
+    classpath = configurations.bddtestRuntime + sourceSets.main.output + sourceSets.bddtest.output
+    jvmArgs = ["-DserverUrl=${hostname()}:${dockerPort}", "-DrunInMemory=${runInMemory}"]
+    args = ['-p', 'pretty', '-p', 'json:build/reports/cucumberResults.json', '--glue', 'uk.co.tpplc.service.stepdefs', 'src/bddtest/features', '--tags', '~@wip']
+}
+
+def hostname() {
+    def docker_host = "$System.env.DOCKER_HOST"
+
+    if (is_blank(docker_host)) {
+        return "http://localhost"
+    }
+
+    return strip_port(docker_host.replaceAll("tcp", "http"))
+}
+
+def is_blank(hostname) {
+    return hostname == "null" || "".equals(hostname)
+}
+
+def strip_port(hostname) {
+    def port_index = hostname.lastIndexOf(":")
+    return hostname.substring(0, port_index)
+}
+
+
+task copyResources(type: Copy) {
+  from sourceSets.bddtest.resources
+  from sourceSets.main.resources
+  into "$buildDir/resources/bddtest"
+}
+
+task(serviceAvailable) << {
+    def i = 0
+    while(!is_available()) {
+      print "."
+      sleep(500)
+      i++
+      if(i > 40){
+        throw new GradleException("Service not available after 20 seconds!")
+      }
+
+    }
+    println "Service available"
+}
+
+def boolean is_available() {
+    try {
+        new URL("${hostname()}:8081/ping").text
+        return true
+    } catch (java.net.ConnectException | java.net.SocketException e) {
+        return false
+    }
+}
+
+

@@ -1,0 +1,1 @@
+alter table Branch add column name varchar(255) null;

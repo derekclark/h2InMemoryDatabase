@@ -1,0 +1,6 @@
+.gradle/
+.idea/
+build/
+h2inmemorydatabase.iml
+h2inmemorydatabase.ipr
+h2inmemorydatabase.iws
