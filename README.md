@@ -52,6 +52,8 @@ public <T> T create(Class<? extends T> clazz) {
 ```
 DBI is part of the JDBI library which exposes relational database access in idiomatic java. See [here](http://jdbi.org/).
 
+jDBI is a convenience library built on top of JDBC. JDBC works very well but generally seems to optimize for the database vendors (driver writers) over the users. jDBI attempts to expose the same functionality, but in an API optimized for users.
+
 BranchDB is a DAO interface. Using the JDBI library it simplifies creating DAO objects mapping a single method to a single SQL statement via an annotated interface.
 
 ```java
